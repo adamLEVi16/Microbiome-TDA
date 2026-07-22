@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <link rel="icon" href="data:,"/>
   <title>Microbiome Topology — Collapse Narrative</title>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -99,6 +100,24 @@
     .leg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
     .leg-line{width:14px;height:2px;flex-shrink:0;border-radius:1px}
 
+    /* ── Live topology readout ───────────────────────────────────────── */
+    #topology{
+      position:absolute;top:186px;right:10px;z-index:100;
+      background:rgba(22,27,34,.92);border:1px solid #30363d;
+      border-radius:8px;padding:9px 11px;font-size:10px;max-width:196px;
+      backdrop-filter:blur(8px)
+    }
+    #topology h3{font-size:10px;font-weight:600;color:#c9d1d9;margin-bottom:6px}
+    .topo-row{display:flex;justify-content:space-between;gap:10px;
+      margin-bottom:4px;color:#8b949e;align-items:baseline}
+    .topo-val{font-weight:700;font-variant-numeric:tabular-nums;font-size:13px}
+    .topo-val small{font-size:9px;font-weight:600;margin-left:3px}
+    #b1{color:#FFD700}
+    #b0{color:#58a6ff}
+    .topo-delta{margin-top:6px;padding-top:6px;border-top:1px solid #21262d;
+      font-size:9px;color:#8b949e;line-height:1.45}
+    @media(max-width:600px){#topology{top:auto;bottom:150px;max-width:160px}}
+
     /* ── Tooltip ─────────────────────────────────────────────────────── */
     #tooltip{
       position:fixed;z-index:300;pointer-events:none;
@@ -188,6 +207,21 @@
     <div id="graph-container"></div>
     <div id="effect-msg"></div>
 
+    <div id="topology">
+      <h3>Live topology</h3>
+      <div class="topo-row">
+        <span>β₁ loops (H₁)</span>
+        <span id="b1" class="topo-val">–</span>
+      </div>
+      <div class="topo-row">
+        <span>β₀ components (H₀)</span>
+        <span id="b0" class="topo-val">–</span>
+      </div>
+      <div class="topo-delta" id="topo-delta">
+        Remove a taxon or raise inflammation to watch loops break.
+      </div>
+    </div>
+
     <div id="legend">
       <h3>Nodes</h3>
       <div class="leg"><div class="leg-dot" style="background:#43A047"></div>Healthy-enriched loops</div>
@@ -203,7 +237,8 @@
 
 <div id="tooltip"></div>
 
-<script src="https://unpkg.com/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
+<!-- Vendored locally so the page works offline / behind restrictive networks -->
+<script src="vendor/3d-force-graph.min.js"></script>
 <script>
 // ── Narrative text per state ─────────────────────────────────────────────────
 const NARRATIVES = {
@@ -225,7 +260,7 @@ const STATE_THRESHOLDS = { healthy: 0, transition: 50, ibd: 87 };
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 let allNodes = [], allEdges = [], hiddenNodes = new Set();
 let inflValue = 0, rotating = true, angle = 0;
-let graph;
+let graph, BASELINE = null;
 
 (async () => {
   const data = await fetch("network_data.json").then(r => r.json());
@@ -347,6 +382,49 @@ function linkOpacity(link, infl) {
   return 0.5;
 }
 
+// ── Live topology (Betti numbers of the visible 1-skeleton) ───────────────────
+// β₀ = connected components (H₀); β₁ = independent loops (H₁) = E − V + C.
+// These are computed exactly from the currently visible graph, so removing a
+// keystone taxon or raising inflammation shows the loop structure collapse —
+// the same H₁ signal reported in the paper (Cohen's d = 2.38).
+function computeBetti(nodes, links) {
+  const idx    = new Map(nodes.map((n, i) => [n.id, i]));
+  const parent = nodes.map((_, i) => i);
+  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+
+  let E = 0;
+  for (const l of links) {
+    const s = idx.get(l._src ?? l.source?.id ?? l.source);
+    const t = idx.get(l._tgt ?? l.target?.id ?? l.target);
+    if (s === undefined || t === undefined) continue;
+    union(s, t); E++;
+  }
+  const V = nodes.length;
+  const C = new Set(nodes.map((_, i) => find(i))).size;
+  return { b0: C, b1: Math.max(0, E - V + C), V, E };
+}
+
+function updateTopology(nodes, links) {
+  const t = computeBetti(nodes, links);
+  if (!BASELINE) BASELINE = t;   // capture full healthy network on first render
+
+  document.getElementById("b1").innerHTML = `${t.b1}<small>loops</small>`;
+  document.getElementById("b0").innerHTML = `${t.b0}<small>parts</small>`;
+
+  const dLoops = t.b1 - BASELINE.b1;
+  const pct    = BASELINE.b1 ? Math.round(100 * t.b1 / BASELINE.b1) : 100;
+  const el = document.getElementById("topo-delta");
+  if (dLoops === 0 && t.b0 === BASELINE.b0) {
+    el.innerHTML = `Full healthy network: <b style="color:#FFD700">${t.b1}</b> loops · `
+      + `<b style="color:#58a6ff">${t.b0}</b> components.`;
+  } else {
+    const lossColor = dLoops < 0 ? "#f85149" : "#3fb950";
+    el.innerHTML = `<b style="color:${lossColor}">${dLoops >= 0 ? "+" : ""}${dLoops}</b> loops vs healthy `
+      + `(${pct}% of H₁ intact) · ${t.V} taxa, ${t.E} edges shown.`;
+  }
+}
+
 // ── Apply inflammation slider ─────────────────────────────────────────────────
 function applyInflammation(value) {
   inflValue = value;
@@ -372,6 +450,9 @@ function applyInflammation(value) {
     .linkWidth(l => linkWidth(l, value))
     .linkOpacity(l => linkOpacity(l, value))
     .graphData({ nodes: styledNodes, links: visibleEdges });
+
+  // Update the live topology readout from the visible 1-skeleton
+  updateTopology(visibleNodes, visibleEdges);
 }
 
 function colorAtInflammation(node, infl) {
