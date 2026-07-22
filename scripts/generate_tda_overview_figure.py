@@ -48,7 +48,8 @@ C_HEALTHY = "#2e7d32"      # green
 C_IBD     = "#c62828"      # red
 C_H0      = "#1565c0"      # blue
 C_H1      = "#e65100"      # orange
-C_H2      = "#6a1b9a"      # purple
+C_H2      = "#6a1b9a"      # purple  (H2 void / cavity)
+C_SIMPLEX = "#8d99ae"      # slate   (filled 2-simplex / face)
 C_EDGE    = "#90a4ae"      # grey
 C_BG      = "#fafafa"
 
@@ -182,11 +183,11 @@ def draw_filtration(axes, dist_matrix, taxa_list):
         np.percentile(sub_dist[sub_dist > 0], 65),
     ]
     labels = [
-        f"$\\varepsilon = {thresholds[0]:.2f}$\n(components only — $H_0$)",
+        f"$\\varepsilon = {thresholds[0]:.2f}$\n(components — $H_0$)",
         f"$\\varepsilon = {thresholds[1]:.2f}$\n(loops appear — $H_1$)",
-        f"$\\varepsilon = {thresholds[2]:.2f}$\n(voids enclosed — $H_2$)",
+        f"$\\varepsilon = {thresholds[2]:.2f}$\n(triangles fill loops)",
     ]
-    stage_colors = [C_H0, C_H1, C_H2]
+    stage_colors = [C_H0, C_H1, C_SIMPLEX]
 
     for panel_idx, (ax, thresh, label, scol) in enumerate(
             zip(axes, thresholds, labels, stage_colors)):
@@ -205,8 +206,8 @@ def draw_filtration(axes, dist_matrix, taxa_list):
         for tri in triangles:
             verts = [pos[tri[0]], pos[tri[1]], pos[tri[2]]]
             triangle = Polygon(verts, closed=True,
-                               facecolor=C_H2, alpha=0.15, edgecolor=C_H2,
-                               linewidth=0.2)
+                               facecolor=C_SIMPLEX, alpha=0.18,
+                               edgecolor=C_SIMPLEX, linewidth=0.2)
             ax.add_patch(triangle)
 
         # Draw edges
@@ -249,8 +250,39 @@ def draw_filtration(axes, dist_matrix, taxa_list):
 #  PANEL C: 3D simplicial complex with annotations
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _octahedron_faces(center, radius):
+    """Return the 8 triangular faces of an octahedron boundary.
+
+    The octahedron *boundary* (its 8 faces, with no solid interior) is the
+    simplest closed 2-surface: it is a 2-sphere and therefore carries a single
+    non-trivial H2 class. We use it as an honest glyph for an enclosed void /
+    cavity — faces present, interior empty.
+    """
+    cx, cy, cz = center
+    r = radius
+    verts = [
+        (cx + r, cy, cz), (cx - r, cy, cz),
+        (cx, cy + r, cz), (cx, cy - r, cz),
+        (cx, cy, cz + r), (cx, cy, cz - r),
+    ]
+    px, nx_, py, ny, pz, nz = verts
+    faces = [
+        [px, py, pz], [py, nx_, pz], [nx_, ny, pz], [ny, px, pz],
+        [px, py, nz], [py, nx_, nz], [nx_, ny, nz], [ny, px, nz],
+    ]
+    return faces
+
+
 def draw_3d_simplicial(ax, dist_matrix):
-    """Draw a 3D simplicial complex highlighting H0, H1, H2."""
+    """Draw a 3D simplicial complex highlighting H0, H1, H2.
+
+    Note on interpretation: the 3D coordinates come from a force-directed
+    spring layout and are illustrative only — they are NOT the geometry from
+    which persistent homology is computed (Vietoris-Rips is metric/embedding
+    free). Filled triangles are 2-simplices (faces); a single filled triangle
+    *fills in* a loop rather than forming a void. A genuine H2 void is a closed
+    empty shell, drawn separately below as an octahedron boundary.
+    """
     n_show = 25
     # Pick a tightly connected cluster
     adj = dist_matrix < np.percentile(dist_matrix[dist_matrix > 0], 35)
@@ -285,15 +317,17 @@ def draw_3d_simplicial(ax, dist_matrix):
                     if sub_dist[i, k] < thresh and sub_dist[j, k] < thresh:
                         triangles.append([i, j, k])
 
-    # Draw filled triangles (H2 faces) — some opaque, some translucent
+    # Draw filled triangles (2-simplices / faces). A filled triangle is a
+    # 2-simplex: it *fills in* a 3-node loop. It is NOT a void — it is the
+    # opposite (adding faces kills H1 rather than creating H2).
     tri_verts = []
     for tri in triangles:
         verts = [pos_3d[tri[0]], pos_3d[tri[1]], pos_3d[tri[2]]]
         tri_verts.append(verts)
 
     if tri_verts:
-        poly = Poly3DCollection(tri_verts, alpha=0.18, facecolor=C_H2,
-                                edgecolor=C_H2, linewidth=0.4)
+        poly = Poly3DCollection(tri_verts, alpha=0.14, facecolor=C_SIMPLEX,
+                                edgecolor=C_SIMPLEX, linewidth=0.4)
         ax.add_collection3d(poly)
 
     # Draw edges (H1 skeleton)
@@ -312,25 +346,49 @@ def draw_3d_simplicial(ax, dist_matrix):
         ax.scatter(*pos_3d[i], s=sz, c=C_H0, edgecolors="white",
                    linewidths=0.8, zorder=5, depthshade=True)
 
-    # Legend
-    ax.text2D(0.03, 0.97, "$H_0$: components", transform=ax.transAxes,
+    # ── Genuine H2 void glyph: a hollow octahedron shell ────────────────────
+    # Placed in an empty corner of the layout. Its 8 faces enclose an EMPTY
+    # interior — this closed 2-surface is what actually carries an H2 class,
+    # in contrast to the individual filled triangles above.
+    all_xyz = np.array([pos_3d[i] for i in range(n_show)])
+    span = all_xyz.max(axis=0) - all_xyz.min(axis=0)
+    void_center = all_xyz.max(axis=0) + np.array([0.15 * span[0],
+                                                  0.05 * span[1],
+                                                  0.10 * span[2]])
+    void_r = 0.16 * np.mean(span)
+    void_faces = _octahedron_faces(void_center, void_r)
+    void_poly = Poly3DCollection(void_faces, alpha=0.12, facecolor=C_H2,
+                                 edgecolor=C_H2, linewidth=1.1)
+    ax.add_collection3d(void_poly)
+    ax.text(void_center[0], void_center[1], void_center[2] - 2.1 * void_r,
+            "empty inside", color=C_H2, fontsize=7,
+            fontweight="bold", ha="center",
+            path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+
+    # Legend (topologically correct)
+    ax.text2D(0.03, 0.97, "$H_0$: components (nodes)", transform=ax.transAxes,
               fontsize=9, color=C_H0, fontweight="bold",
               path_effects=[pe.withStroke(linewidth=2, foreground="white")])
-    ax.text2D(0.03, 0.91, "$H_1$: loops (cycles)", transform=ax.transAxes,
+    ax.text2D(0.03, 0.91, "$H_1$: loops (edge cycles)", transform=ax.transAxes,
               fontsize=9, color=C_H1, fontweight="bold",
               path_effects=[pe.withStroke(linewidth=2, foreground="white")])
-    ax.text2D(0.03, 0.85, "$H_2$: voids (cavities)", transform=ax.transAxes,
-              fontsize=9, color=C_H2, fontweight="bold",
+    ax.text2D(0.03, 0.85, "2-simplices (faces — fill loops)",
+              transform=ax.transAxes, fontsize=9, color=C_SIMPLEX,
+              fontweight="bold",
+              path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+    ax.text2D(0.03, 0.79, "$H_2$: void (enclosed cavity)",
+              transform=ax.transAxes, fontsize=9, color=C_H2, fontweight="bold",
               path_effects=[pe.withStroke(linewidth=2, foreground="white")])
 
     n_edges = G.number_of_edges()
     n_tri = len(triangles)
-    ax.text2D(0.5, 0.02, f"{n_show} nodes · {n_edges} edges · {n_tri} triangles",
+    ax.text2D(0.5, 0.02, f"{n_show} nodes · {n_edges} edges · {n_tri} faces "
+              "· layout is schematic",
               transform=ax.transAxes, fontsize=7, color="grey", ha="center",
               path_effects=[pe.withStroke(linewidth=2, foreground="white")])
 
-    ax.set_title("3D Simplicial Complex\n(Healthy Network)", fontsize=12,
-                 fontweight="bold", pad=8)
+    ax.set_title("3D Simplicial Complex\n(Healthy Network — schematic layout)",
+                 fontsize=12, fontweight="bold", pad=8)
 
     # Clean 3D axes
     ax.xaxis.pane.fill = False
