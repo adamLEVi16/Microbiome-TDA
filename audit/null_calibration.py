@@ -23,7 +23,7 @@ known. Requires the IBDMDB files from scripts/download_ibdmdb.sh.
   G  How much of each H1 feature is explained by the mean |Spearman r| of the
      network, i.e. a one-number summary with no topology in it.
 
-Usage:  python audit/null_calibration.py            (about 10 minutes on 4 cores)
+Usage:  python audit/null_calibration.py            (about 15 minutes on 4 cores)
 Writes: audit/results/*.csv
 """
 
@@ -31,6 +31,10 @@ import logging
 import os
 import sys
 from multiprocessing import Pool
+
+# One BLAS thread per worker; otherwise 4 workers oversubscribe the CPU.
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
 
 import numpy as np
 import pandas as pd

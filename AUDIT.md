@@ -9,7 +9,7 @@ The paper's conclusions are not supported, and the paper should not be submitted
 1. **The significance test cannot distinguish a real difference from noise.** When both groups are drawn from the same population, the test reports p < 0.05 in 53–90% of runs (a valid test gives 5%) and often reports all six features as significant. Every topology group comparison in the paper (AGP, IBDMDB, biomarkers, treatment response) uses this test.
 2. **The "top-80 most prevalent taxa" are the first 80 columns of the data file.** The prevalence score is exactly 0.5 for every taxon, so the ranking is a tie and pandas returns columns in file order. In IBDMDB this drops all Proteobacteria, *F. prausnitzii*, *E. coli*, *R. gnavus*, *Roseburia* and *Akkermansia*, which are the taxa the paper's biological explanations rely on.
 3. **Cohen's d is computed on bootstrap replicates, not on people**, so it is not an effect size. Two random groups of healthy IBDMDB subjects give a median |d| of 1.25 for loop count, larger than the paper's IBD-vs-non-IBD value for the same feature (0.96). Changing the subsample size from 60 to 100 roughly doubles the paper's d on the same data.
-4. **The IBDMDB replication fails.** The paper admits this in Results ("not a robust cross-cohort replication") but claims replication in the Abstract, Introduction, Discussion and Conclusion. A subject-level permutation test (the correct test) is reported below.
+4. **The IBDMDB replication fails.** The paper admits this in Results ("not a robust cross-cohort replication") but claims replication in the Abstract, Introduction, Discussion and Conclusion. Under a subject-level permutation test (the correct test), none of the six features differs between IBD and non-IBD in IBDMDB (p = 0.19–0.49). With the taxon selection fixed, loop count and entropy reverse direction.
 5. **Many numbers in the paper contradict the repo's own result files.** The clearest case: the inductive-benchmark permutation p-value is 0.185 in `results/inductive_benchmark.csv`, but the paper reports "p < 0.001".
 6. **The AI Tools Declaration is inaccurate.** Git history shows every analysis script and every paper section was written and committed by Claude.
 
@@ -45,7 +45,7 @@ The same problem applies to Cohen's d. The spread of bootstrap values depends on
 | h1_max_lifetime | 0.53 | 0.17 | 0.21 | 0.93 |
 | max_betti1 | 0.85 | 0.70 | 0.47 | 1.34 |
 
-98% of null runs have at least one "significant" feature, and 28% have all six. "6/6 features significant" is the paper's headline result, and it happens under pure noise more than a quarter of the time.
+39 of 40 null runs have at least one "significant" feature, and 11 of 40 (28%) have all six. "6/6 features significant" is the paper's headline result, and it happens under pure noise more than a quarter of the time.
 
 **B. Real-data negative control.** 30 runs. The 26 healthy IBDMDB subjects are split at random into two groups of 13, then run with the paper's IBDMDB settings (n = 60).
 
@@ -58,13 +58,13 @@ The same problem applies to Cohen's d. The spread of bootstrap values depends on
 | h1_max_lifetime | 0.73 | 0.53 | 0.37 | 0.93 |
 | max_betti1 | 0.83 | 0.70 | 0.72 | 2.54 |
 
-43% of splits of healthy people produce "all six features significant". The paper's IBDMDB IBD-vs-non-IBD effects (|d| = 0.52–1.46) sit inside this null range.
+13 of 30 splits of healthy people (43%) produce "all six features significant". The paper's IBDMDB IBD-vs-non-IBD effects (|d| = 0.52–1.46) sit inside this null range.
 
 **What this means for AGP.** The AGP IBD effects (|d| = 1.23–2.28) are larger than most values in run A, and two of them (total persistence 2.27, max Betti-1 2.07) exceed all 40 null runs. So a real difference between the AGP IBD and non-IBD pools is not ruled out. But the paper never tested it correctly, and Section 3 explains why a real difference would not mean what the paper says. The diet (|d| ≤ 0.65) and antibiotic (|d| ≤ 0.39) results are inside the null range and carry no evidence. Every p = 0.002 and every "FDR-significant" star in the paper should be disregarded.
 
 **Further evidence of instability.** Several results changed completely when only the random-number stream changed:
 
-- The HBI comparison (active vs remission Crohn's) went from 4/6 significant at p = 0.002 (`results/old_v1/ibdmdb_bootstrap.csv`) to 0/6 with p up to 0.93 (`results/ibdmdb_bootstrap.csv`) after commit `1df7aed` changed per-comparison seeding. The paper still reports 4/6 (Results §3.6, Table 6).
+- The HBI comparison (active vs remission Crohn's) went from 4/6 significant at p = 0.002 (`results/old_v1/ibdmdb_bootstrap.csv`) to 0/6 with p up to 0.93 (`results/ibdmdb_bootstrap.csv`) after commit `1df7aed` changed per-comparison seeding. The paper still reports 4/6 (Results §3.6, Table 6). Re-running the HBI comparison with 10 seeds (check E) gives d between −0.52 and +0.10. Depending on the feature, 2 to 7 of the 10 seeds reach p < 0.05. Whether HBI is "significant" is decided by the seed.
 - Matched antibiotics at N = 80 is 4/6 significant in `results/agp_bootstrap_v2.csv` and 0/6 in `results/taxa_sensitivity.csv`. These are the same analysis. The paper quotes each in different sentences.
 
 ## 2. Taxon selection is by file order, not prevalence
@@ -111,7 +111,7 @@ Correlation networks built from pure noise (80 independent taxa, n = 100) have f
 | h1_max_lifetime | 0.115 | 0.119 | 0.080 |
 | max_betti1 | 149.1 | 7.1 | 3.4 |
 
-So in this pipeline, "more loops" means "less correlation structure". A network with no biology in it scores highest on every "complexity" feature. Fewer loops in IBD therefore does not show that interaction cycles were lost. It shows that the IBD correlation matrix is further from random in some respect, and which respect is unclear. In IBDMDB, Crohn's networks have a higher mean |Spearman r| than non-IBD (0.398 vs 0.372), but pooled IBD and non-IBD are the same (0.371 vs 0.372), so the pooled difference is not simply stronger correlation.
+So in this pipeline, "more loops" means "less correlation structure". A network with no biology in it scores highest on every "complexity" feature. Fewer loops in IBD therefore does not show that interaction cycles were lost. It shows that the IBD correlation matrix is further from random in some respect, and which respect is unclear. In IBDMDB, Crohn's networks have a higher mean |Spearman r| than non-IBD (0.398 vs 0.372), but pooled IBD and non-IBD are the same (0.371 vs 0.372), so the pooled difference is not simply stronger correlation. Across 300 random subsamples (check G), mean |r| explains 17–23% of the variation in loop count, entropy and total persistence, and none of the variation in the lifetime features. The features are not a readout of overall correlation strength, and nothing in the paper identifies what they do track.
 
 The real loops are also no longer-lived than noise loops (max lifetime 0.12 vs 0.115). The sampling error of a Spearman correlation at n = 100 is about 0.10, several times larger than typical loop lifetimes (0.02–0.04).
 
@@ -121,9 +121,22 @@ The Discussion (§4.1) says "Persistent loops in the H1 sense require at least t
 
 **Pseudoreplication.** IBDMDB has 12.6 samples per subject on average (106 subjects, 1,338 samples). The main IBDMDB analysis treats samples as independent. The paper's own one-sample-per-subject check reverses the direction for 5 of 6 features, with both directions at p = 0.002. The Results section says this is "not a robust cross-cohort replication". The Abstract ("topologically simpler … across two independent cohorts"), Introduction contribution 4, Discussion §4.5 ("qualitatively successful") and Conclusion item 1 ("reproduced in IBDMDB") still claim replication. It is also the same pipeline on different data, not "a fully independent pipeline".
 
-**Correct test (checks C/D).** The paper's IBDMDB IBD-vs-non-IBD result is reproduced exactly (d = −0.955, −0.730, −1.458, −0.963, −1.229, −0.518). The diagnosis label is then permuted across the 106 subjects, keeping each person's samples together, and the network comparison is recomputed each time: *(results pending; this run was still in progress at the time of this commit)*
+**Correct test (checks C/D).** The paper's IBDMDB IBD-vs-non-IBD result is reproduced exactly (d = −0.955, −0.730, −1.458, −0.963, −1.229, −0.518). The diagnosis label is then permuted across the 106 subjects, keeping each person's samples together, and the network comparison is recomputed each time (200 permutations).
 
-**One sample per subject, repeated (check F).** The paper's 1-per-subject result used a single random draw of timepoints. Repeating it with 10 draws: *(results pending)*
+| feature | paper's d | paper's p (sign-flip) | p, subject-level permutation | p, subject-level permutation, taxa by detection prevalence (d) |
+|---|---|---|---|---|
+| h1_count | −0.96 | 0.002 | 0.21 | 0.40 (d = **+0.80**) |
+| h1_entropy | −0.73 | 0.002 | 0.39 | 0.46 (d = **+0.73**) |
+| h1_total_persistence | −1.46 | 0.002 | 0.19 | 0.85 (d = −0.15) |
+| h1_mean_lifetime | −0.96 | 0.002 | 0.49 | 0.14 (d = −1.15) |
+| h1_max_lifetime | −1.23 | 0.002 | 0.19 | 0.64 (d = −0.67) |
+| max_betti1 | −0.52 | 0.002 | 0.41 | 0.94 (d = −0.09) |
+
+Under the correct test, none of the six features differs between IBD and non-IBD in IBDMDB. On randomly relabelled subjects, the paper's sign-flip test returns p < 0.05 for 77–97% of features. When the taxa are chosen correctly, the direction reverses for loop count and entropy (IBD has *more* loops), and total persistence and max Betti-1 go to about zero. There is no IBD topology signal in IBDMDB to replicate.
+
+**One sample per subject, repeated (check F).** The paper's 1-per-subject result used a single random draw of timepoints. Repeating it with 10 draws: loop count is *negative* (IBD < non-IBD) in 9 of 10 draws, with d from −2.66 to +0.50. For max lifetime the sign splits 6–4 while all 10 draws reach p < 0.05. The paper's "reversal" is one draw of an unstable procedure, and nearly every draw is "significant" in whichever direction it lands.
+
+The paper explains the reversal by saying "IBDMDB subjects with more active disease are sampled at higher frequency". Nothing in the code tests this, and the data do not support it. Among IBD subjects, the number of samples is unrelated to mean HBI (ρ = +0.01, p = 0.92), mean SCCAI (ρ = +0.11, p = 0.55) or mean calprotectin (ρ = +0.21, p = 0.11). Non-IBD subjects were sampled more often than IBD subjects (14.0 vs 12.2 samples per person).
 
 **Calprotectin, dose-response and trajectories.** These analyses contradict each other and the text:
 
@@ -137,9 +150,9 @@ The Discussion (§4.1) says "Persistent loops in the H1 sense require at least t
 ## 5. Classification benchmark
 
 - **Wrong p-value.** The inductive benchmark's permutation test (`simulations/run_inductive_benchmark.py:264-331`) tests whether topology improves on Shannon. `results/inductive_benchmark.csv` stores the result in columns named for AUCs: observed improvement 0.0276, null SD 0.0293, **p = 0.185**. The paper (§3.9) reports "The mean permuted AUC was 0.028 (i.e., far below the 0.50 chance level … reflecting the class imbalance), establishing a one-sided p < 0.001". The number was misread, AUC does not depend on class imbalance, and the actual result is not significant. The same claim is repeated in the Discussion, Conclusion and Introduction contribution 8.
-- **Wrong dataset.** Table 8 is captioned "AGP", but the script loads IBDMDB (`run_inductive_benchmark.py:343`). The paper's "70/30 split, 25 random seeds" is actually 5-fold CV × 5 seeds. The Conclusion's "Δ = 0.15 gap to Aitchison under inductive evaluation" subtracts an IBDMDB number from an AGP number.
+- **Wrong dataset.** Table 8 is captioned "AGP", but the script loads IBDMDB (`run_inductive_benchmark.py:343`). The paper describes "a 70/30 stratified train/test split" that "is repeated across 25 random seeds"; the code runs 5-fold CV with 5 seeds. The Conclusion's "Δ = 0.15 gap to Aitchison under inductive evaluation" subtracts an IBDMDB number from an AGP number.
 - **Same person in train and test.** IBDMDB cross-validation splits samples rather than subjects, so each person's other timepoints are in the training fold. The k-NN "per-sample topology" (`src/tda/sample_features.py`) is built from a sample's 40 nearest neighbours. On average 28% of those neighbours are the same person's other timepoints (nearly all of them), and for 91% of samples the single nearest neighbour is the same person.
-- **"Per-sample topology" excludes the sample.** It is computed from the sample's 60 nearest neighbours in CLR space, excluding the sample itself (`sample_features.py:88`). It encodes where a sample sits in Aitchison space, which explains why it adds nothing over Aitchison-PCoA (0.728 vs 0.734).
+- **"Per-sample topology" excludes the sample.** It is computed from the sample's nearest neighbours in CLR space (60 in the AGP benchmark, 40 in the IBDMDB scripts), excluding the sample itself (`sample_features.py:88`). It encodes where a sample sits in Aitchison space, which explains why it adds nothing over Aitchison-PCoA (0.728 vs 0.734).
 - Even taken at face value, topology alone is the weakest feature set tested (AGP LR AUC 0.668 vs Aitchison 0.734; precision 12% at 95% specificity).
 
 ## 6. Loop attribution
@@ -182,7 +195,7 @@ Git history: 63 of 71 commits are authored by Claude, including every file in `s
 **Idea: 4/10.** Asking whether disease changes the interaction structure of the gut microbiome, beyond which taxa are present, is legitimate, and persistent homology is a real tool for multi-scale structure. The weaknesses are in the design itself:
 
 - A co-occurrence network describes a group, not a person. Each comparison is one network against one network, so any valid inference must permute people and rebuild networks. That limits power, and the features cannot diagnose individuals without workarounds like the k-NN trick, which reduces to ordinary beta diversity.
-- H1 of a correlation-distance complex has no established biological meaning, and it is dominated by estimation noise and overall correlation strength (Section 3).
+- H1 of a correlation-distance complex has no established biological meaning. Pure noise produces far more of it than real data does, so "more loops" cannot be read as "more biological interactions" (Section 3).
 - IBD already has well-characterised microbiome signatures. A new representation needs to beat Aitchison distance; here it doesn't.
 - TDA on microbiome data is not new (e.g., tmap, Liao et al. 2019), so the novelty is modest.
 
@@ -195,7 +208,7 @@ Git history: 63 of 71 commits are authored by Claude, including every file in `s
    - Select taxa by detection prevalence: `(counts > 0).mean()`.
    - Test with a label permutation over people, rebuilding the networks each time. For IBDMDB, permute subjects, or use one sample per subject.
    - Report effect sizes on a per-person scale, or report the permutation distribution itself.
-   - Show that topology adds information beyond mean |r| and beyond Aitchison distance before interpreting it.
+   - Show that topology adds information beyond simple network summaries (mean |r|, edge density, modularity) and beyond Aitchison distance before interpreting it.
    - Deduplicate AGP by participant, remove bloom sequences, and control for sequencing depth.
    - Drop the clinical and treatment claims.
 3. Expect this to produce a null or weak result. An honest write-up of "we tested this and it doesn't separate IBD beyond standard metrics, here's why" is legitimate. The current paper is not.
@@ -206,7 +219,7 @@ Git history: 63 of 71 commits are authored by Claude, including every file in `s
 ```bash
 pip install -r requirements.txt && pip install -e .
 bash scripts/download_ibdmdb.sh
-python audit/null_calibration.py   # about 10–15 minutes on 4 cores
+python audit/null_calibration.py   # about 15 minutes on 4 cores
 python audit/summarize.py
 ```
 
